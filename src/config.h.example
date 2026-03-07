@@ -1,0 +1,26 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// WiFi
+#define WIFI_SSID       "YOUR_SSID"
+#define WIFI_PASS       "YOUR_PASSWORD"
+
+// Static route gateway (to reach InfluxDB on another subnet)
+// Set to your gateway IP that routes to the InfluxDB subnet
+#define ROUTE_GW_A  192
+#define ROUTE_GW_B  168
+#define ROUTE_GW_C  1
+#define ROUTE_GW_D  1
+
+// InfluxDB v1
+#define INFLUXDB_HOST   "YOUR_INFLUXDB_HOST"
+#define INFLUXDB_PORT   8086
+#define INFLUXDB_DB     "YOUR_DATABASE"
+
+// Telegram (optional)
+#define TELEGRAM_ENABLED    false
+#define TELEGRAM_BOT_TOKEN  "YOUR_BOT_TOKEN"
+#define TELEGRAM_CHAT_ID    "YOUR_CHAT_ID"
+#define TELEGRAM_COOLDOWN   300000
+
+#endif
