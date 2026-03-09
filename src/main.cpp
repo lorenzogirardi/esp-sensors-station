@@ -126,15 +126,18 @@ unsigned long lastSensorRead   = 0;
 unsigned long lastInfluxSend   = 0;
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastTelegramAlarm = 0;
+unsigned long lastWifiCheck    = 0;
 
 #define SENSOR_INTERVAL   2000    // 2s
 #define INFLUX_INTERVAL   60000   // 60s
 #define DISPLAY_INTERVAL  1000    // 1s
+#define WIFI_CHECK_INTERVAL 10000 // 10s
 
 // ============================================================================
 // STATO RETE
 // ============================================================================
 bool wifiConnected = false;
+bool webServerStarted = false;
 bool influxOk = false;
 int influxErrors = 0;
 
@@ -264,6 +267,7 @@ void addStaticRoute() {
 // ============================================================================
 void initWiFi() {
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     Serial.printf("Connessione a %s (DHCP)", WIFI_SSID);
 
@@ -284,6 +288,40 @@ void initWiFi() {
     } else {
         Serial.println("\nConnessione WiFi fallita!");
     }
+}
+
+// forward declaration
+void initWebServer();
+
+// ============================================================================
+// WIFI RECONNECT CHECK (polling nel loop)
+// ============================================================================
+void checkWiFi() {
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!wifiConnected) {
+            wifiConnected = true;
+            addStaticRoute();
+            Serial.printf("WiFi: riconnesso! IP: %s\n", WiFi.localIP().toString().c_str());
+
+            if (!webServerStarted) {
+                initWebServer();
+                webServerStarted = true;
+            }
+        }
+        return;
+    }
+
+    // Disconnesso
+    if (wifiConnected) {
+        wifiConnected = false;
+        influxOk = false;
+        Serial.println("WiFi: disconnesso");
+    }
+
+    // Forza tentativo di riconnessione
+    Serial.println("WiFi: tentativo riconnessione...");
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
 // ============================================================================
@@ -820,6 +858,7 @@ void setup() {
 
     if (wifiConnected) {
         initWebServer();
+        webServerStarted = true;
     }
 
     // Stabilizzazione PIR
@@ -847,6 +886,12 @@ void setup() {
 // ============================================================================
 void loop() {
     unsigned long now = millis();
+
+    // WiFi check periodico
+    if (now - lastWifiCheck >= WIFI_CHECK_INTERVAL) {
+        lastWifiCheck = now;
+        checkWiFi();
+    }
 
     // Web server
     if (wifiConnected) {
