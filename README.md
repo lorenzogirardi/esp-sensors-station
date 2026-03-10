@@ -2,6 +2,16 @@
 
 ESP32-based environmental monitoring station with TFT display, web dashboard, InfluxDB logging, and optional Telegram alerts.
 
+## Photos
+
+| Temperature & Humidity | Air Quality | Motion Detection |
+|:---:|:---:|:---:|
+| ![Temperature](media/stationtemp001_compressed_compressed.jpg) | ![Air Quality](media/stationairquality001_compressed_compressed.jpg) | ![Motion](media/stationmove001_compressed_compressed.jpg) |
+
+| Network Info | Web Dashboard |
+|:---:|:---:|
+| ![Network](media/stationnetwork001_compressed_compressed.jpg) | ![Web Dashboard](media/stationespweb_compressed_compressed.jpg) |
+
 ## Sensors
 
 | Sensor | Type | Interface | Pin |
