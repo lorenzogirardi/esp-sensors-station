@@ -19,6 +19,7 @@
 #include "esp_netif.h"
 #include "lwip/ip4_addr.h"
 #include "lwip/netif.h"
+#include "esp_task_wdt.h"
 
 #include "config.h"
 
@@ -131,7 +132,9 @@ unsigned long lastWifiCheck    = 0;
 #define SENSOR_INTERVAL   2000    // 2s
 #define INFLUX_INTERVAL   60000   // 60s
 #define DISPLAY_INTERVAL  1000    // 1s
-#define WIFI_CHECK_INTERVAL 10000 // 10s
+#define WIFI_CHECK_INTERVAL 30000 // 30s
+#define MAX_INFLUX_ERRORS 10      // reboot dopo 10 errori consecutivi
+#define WDT_TIMEOUT       30      // watchdog 30s
 
 // ============================================================================
 // STATO RETE
@@ -267,6 +270,8 @@ void addStaticRoute() {
 // ============================================================================
 void initWiFi() {
     WiFi.mode(WIFI_STA);
+    WiFi.persistent(false);           // non scrivere credenziali su flash
+    WiFi.setSleep(false);             // disabilita power saving WiFi
     WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     Serial.printf("Connessione a %s (DHCP)", WIFI_SSID);
@@ -296,10 +301,13 @@ void initWebServer();
 // ============================================================================
 // WIFI RECONNECT CHECK (polling nel loop)
 // ============================================================================
+int wifiReconnectAttempts = 0;
+
 void checkWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         if (!wifiConnected) {
             wifiConnected = true;
+            wifiReconnectAttempts = 0;
             addStaticRoute();
             Serial.printf("WiFi: riconnesso! IP: %s\n", WiFi.localIP().toString().c_str());
 
@@ -318,9 +326,21 @@ void checkWiFi() {
         Serial.println("WiFi: disconnesso");
     }
 
-    // Forza tentativo di riconnessione
-    Serial.println("WiFi: tentativo riconnessione...");
-    WiFi.disconnect();
+    wifiReconnectAttempts++;
+    Serial.printf("WiFi: tentativo riconnessione %d...\n", wifiReconnectAttempts);
+
+    // Dopo 5 tentativi falliti, reset completo dello stack WiFi
+    if (wifiReconnectAttempts > 5) {
+        Serial.println("WiFi: reset completo stack WiFi");
+        WiFi.disconnect(true);  // true = cancella config
+        delay(1000);
+        WiFi.mode(WIFI_STA);
+        WiFi.setSleep(false);
+        wifiReconnectAttempts = 0;
+    } else {
+        WiFi.disconnect();
+    }
+
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -512,7 +532,12 @@ void sendToInfluxDB() {
     } else {
         influxOk = false;
         influxErrors++;
-        Serial.printf("InfluxDB errore: %d\n", code);
+        Serial.printf("InfluxDB errore: %d (consecutivi: %d)\n", code, influxErrors);
+        if (influxErrors >= MAX_INFLUX_ERRORS) {
+            Serial.println("Troppi errori InfluxDB, reboot...");
+            delay(1000);
+            ESP.restart();
+        }
     }
 }
 
@@ -878,6 +903,10 @@ void setup() {
         delay(1000);
     }
 
+    // Watchdog: se il loop si blocca per >30s, reboot automatico
+    esp_task_wdt_init(WDT_TIMEOUT, true);
+    esp_task_wdt_add(NULL);
+
     Serial.println("Inizializzazione completata!\n");
 }
 
@@ -885,6 +914,7 @@ void setup() {
 // LOOP
 // ============================================================================
 void loop() {
+    esp_task_wdt_reset();  // feed watchdog
     unsigned long now = millis();
 
     // WiFi check periodico
